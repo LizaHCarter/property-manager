@@ -39,6 +39,4 @@ Renter.prototype.party = function(){
   console.log(party);
 };
 
-
-
 module.exports = Renter;

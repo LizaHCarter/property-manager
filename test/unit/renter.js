@@ -61,5 +61,3 @@ describe('Renter', function(){
   });
 
 });
-
-
