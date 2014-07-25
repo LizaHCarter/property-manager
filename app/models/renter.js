@@ -23,9 +23,10 @@ Renter.prototype.work = function(){
 };
 
 Renter.prototype.payRent = function(amount){
-  this._cash -= amount;
-  if(this._cash < 0){
+  if(this._cash < amount){
     this._isEvicted = true;
+  }else{
+    this._cash -= amount;
   }
 };
 
