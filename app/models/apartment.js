@@ -1,6 +1,10 @@
 'use strict';
-var cApartment = global.mongodb.collection('apartments');
-//var _ = require('lodash');
+
+var Mongo = require('mongodb');
+
+var Room = require('./room');
+var Renter = require('./renter');
+var _ = require('lodash');
 
 function Apartment(unit){
   this.unit = unit;
@@ -8,66 +12,158 @@ function Apartment(unit){
   this.renters = [];
 }
 
-Apartment.prototype.save = function(cb){
-  cApartment.save(this, function(err, obj){
-    cb();
-  });
-};
-
-Apartment.find = function(query, cb){
-  cApartment.find(query).toArray(function(err, apartments){
-    cb(apartments);
-  });
-};
-
-Apartment.findById= function(id, cb){
-  cApartment.findOne({_id:id}, function(err, apt){
-    cb(apt);
-  });
-};
+Object.defineProperty(Apartment, 'collection', {
+  get: function(){
+    return global.mongodb.collection('apartments');
+  }
+});
 
 Apartment.prototype.area = function(){
-  var total = 0;
+  var area = 0;
+
   for(var i = 0; i < this.rooms.length; i++){
-    total += (this.rooms[i].length * this.rooms[i].width);
+    area+= this.rooms[i].area();
   }
-  return total;
+  return area;
 };
 
 Apartment.prototype.cost = function(){
-  var cost = this.area() * 5;
+  var cost = 0;
+
+  for(var i = 0; i < this.rooms.length; i++){
+    cost += this.rooms[i].cost();
+  }
   return cost;
 };
 
+Apartment.prototype.revenue = function(){
+  return(this.renters.length) ? this.cost() : 0; /* ? */
+};
+
 Apartment.prototype.bedrooms = function(){
-  var br = 0;
-  for(var i =0; i < this.rooms.length; i++){
-    if(this.rooms[i].name === 'bedroom'){
-      br += 1;
-    }
+  var count = 0;
+
+  for(var i = 0; i < this.rooms.length; i++){
+    count += this.rooms[i].isBedroom() ? 1 : 0;
   }
-  return br;
+  return count;
 };
 
 Apartment.prototype.isAvailable = function(){
   return this.bedrooms() > this.renters.length;
 };
 
-Apartment.prototype.purgeEvicted = function(){
-  var notEvicted = [];
+Apartment.prototype.purge = function(){
+  var renters = [];
+
   for(var i = 0; i < this.renters.length; i++){
-    if(this.renters[i]._isEvicted === false){
-      notEvicted.push(this.renters[i]);
+    if (!this.renters[i]._isEvicted){
+      renters.push(this.renters[i]);
     }
   }
-  this.renters = notEvicted;
+  this.renters = renters;
 };
 
 Apartment.prototype.collectRent = function(){
-  var rent = 0;
-  rent = this.cost() / this.renters.length;
-  return rent;
+  if(!this.renters.length){return 0;}
+
+  var rent = this.cost() / this.renters.length;
+  var collected = 0;
+
+  for(var i = 0; i < this.renters.length; i++){
+    collected += this.renters[i].payRent(rent);
+  }
+  return collected;
 };
 
+Apartment.prototype.save = function(cb){
+    Apartment.collection.save(this, cb);
+  };
+
+Apartment.find = function(query, cb){
+  debugger;
+  Apartment.collection.find(query).toArray(function(err, apts){
+    debugger;
+    for(var i = 0; i < apts.length; i++){
+      apts[i] = changePrototype(apts[i]);
+    }
+    cb(err, apts);
+  });
+};
+
+Apartment.findById= function(id, cb){
+  id = (typeof id === 'string') ? Mongo.ObjectID(id) : id;
+  Apartment.collection.findOne({_id:id}, function(err, apt){
+    cb(err, changePrototype(apt));
+  });
+};
+
+Apartment.deleteById = function(id, cb){
+  id = (typeof id === 'string') ? Mongo.ObjectID(id) : id;
+  Apartment.collection.findAndRemove({_id:id}, cb);
+};
+
+Apartment.area =  function(cb){
+  Apartment.find({}, function(err, apts){
+    var sum = 0;
+
+    console.log(apts);
+
+    for(var i=0; i < apts.length; i++){
+      sum += apts[i].area();
+    }
+    cb(sum);
+  });
+};
+
+Apartment.cost = function(cb){
+  Apartment.find({}, function(err, apts){
+    var sum = 0;
+
+    for(var i = 0; i < apts.length; i++){
+      sum+= apts[i].cost();
+    }
+    cb(sum);
+  });
+};
+
+Apartment.revenue = function(cb){
+  Apartment.find({}, function(err, apts){
+    var sum = 0;
+
+    for(var i = 0; i < apts.length; i++){
+      sum += apts[i].revenue();
+    }
+    cb(sum);
+  });
+};
+
+Apartment.tenants = function(cb){
+  Apartment.find({}, function(err,apts){
+    var sum = 0;
+
+    for(var i = 0; i < apts.length; i++){
+      sum += apts[i].renters.length;
+    }
+    cb(sum);
+  });
+};
 
 module.exports = Apartment;
+
+// PRIVATE FUNCTIONS //
+
+function changePrototype(apt){
+  apt = _.create(Apartment.prototype, apt);
+
+  for(var i = 0; i < apt.rooms.length; i++){
+    apt.rooms[i] = _.create(Room.prototype, apt.rooms[i]);
+  }
+
+  for(var j = 0; j < apt.renters.length; j++){
+    apt.renters[j] = _.create(Renter.prototype, apt.renters[j]);
+  }
+  return apt;
+}
+
+

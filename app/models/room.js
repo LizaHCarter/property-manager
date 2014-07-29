@@ -14,4 +14,8 @@ Room.prototype.cost = function(){
   return this.area() * 5;
 };
 
+Room.prototype.isBedroom = function(){
+  return this.name === 'bed';
+};
+
 module.exports = Room;
